@@ -73,6 +73,18 @@ printf 'net.ipv4.tcp_syncookies = 0\n' > "$T/d/10-base.conf"
 printf 'net.ipv4.tcp_syncookies = 1\n' > "$T/d/99-override.conf"
 refute "later file overrides earlier" "tcp_syncookies: is 0" -- $SA "$T/d" --no-color
 
+echo "== sysctl.d directory precedence =="
+mkdir -p "$T/etc" "$T/vendor"
+printf 'net.ipv4.tcp_syncookies = 1\n' > "$T/etc/50-security.conf"
+printf 'net.ipv4.tcp_syncookies = 0\n' > "$T/vendor/50-security.conf"
+if python3 - "$T/etc" "$T/vendor" <<'PY'
+import os, sys, sysctlaudit
+paths = sysctlaudit._resolve_default_targets([sys.argv[1], sys.argv[2]], os.path.join(sys.argv[1], "missing"))
+assert paths == [os.path.join(sys.argv[1], "50-security.conf")]
+PY
+then printf '  PASS  %s\n' "higher-priority basename masks vendor file"; pass=$((pass+1))
+else printf '  FAIL  %s\n' "higher-priority basename masks vendor file"; fail=$((fail+1)); fi
+
 echo
 echo "== $pass passed, $fail failed =="
 [[ $fail -eq 0 ]]

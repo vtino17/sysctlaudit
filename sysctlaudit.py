@@ -117,9 +117,23 @@ def _resolve_targets(args_paths: list[str]) -> list[str]:
                 files.append(p)
         return files
     # system defaults, in sysctl's own precedence order (later wins)
-    defaults = ["/etc/sysctl.conf"] + sorted(glob.glob("/etc/sysctl.d/*.conf")) + \
-               sorted(glob.glob("/run/sysctl.d/*.conf")) + sorted(glob.glob("/usr/lib/sysctl.d/*.conf"))
-    return [p for p in defaults if os.path.exists(p)]
+    return _resolve_default_targets()
+
+
+def _resolve_default_targets(directories: list[str] | None = None,
+                             legacy: str = "/etc/sysctl.conf") -> list[str]:
+    """Resolve sysctl.d files with basename masking and directory priority."""
+    directories = directories or [
+        "/etc/sysctl.d", "/run/sysctl.d", "/usr/local/lib/sysctl.d", "/usr/lib/sysctl.d"
+    ]
+    selected: dict[str, str] = {}
+    for directory in directories:
+        for path in sorted(glob.glob(os.path.join(directory, "*.conf"))):
+            selected.setdefault(os.path.basename(path), path)
+    files = [selected[name] for name in sorted(selected)]
+    if os.path.exists(legacy):
+        files.append(legacy)
+    return files
 
 
 def main(argv: list[str] | None = None) -> int:
